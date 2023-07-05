@@ -1,6 +1,11 @@
 # Set up local environment
 
 ```
+git clone https://github.com/HaxyMoly/Vicuna-LangChain.git
+git clone https://github.com/take1byte/FastChat.git
+```
+
+```
 cd FastChat
 git checkout fschat-with-top-k-kb-prompts
 cd ../Vicuna-LangChain
@@ -25,9 +30,3 @@ python3 vicuna_cli.py --vicuna-dir $MODEL_NAME --load-8bit
 ```
 python3 vicuna_cli.py --vicuna-dir $MODEL_NAME --load-8bit --knowledge-base
 ```
-
-
-
-
-
-
