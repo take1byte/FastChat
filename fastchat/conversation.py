@@ -162,6 +162,9 @@ class Conversation:
         """Append a new message."""
         self.messages.append([role, message])
 
+    def correct_message(self, message):
+        self.messages[-2][-1] = message
+
     def update_last_message(self, message: str):
         """Update the last output.
 
