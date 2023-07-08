@@ -289,6 +289,20 @@ register_conv_template(
         name="vicuna_v1.1",
         system="A chat between a curious user and an artificial intelligence assistant. "
         "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+        roles=["ASSISTANT", "USER"],
+        messages=[["ASSISTANT", "Hi there! My names is Tama. What's your name?"]],
+        offset=0,
+        sep_style=SeparatorStyle.ADD_COLON_TWO,
+        sep=" ",
+        sep2="</s>",
+    )
+)
+
+register_conv_template(
+    Conversation(
+        name="vicuna_v1.1_original",
+        system="A chat between a curious user and an artificial intelligence assistant. "
+        "The assistant gives helpful, detailed, and polite answers to the user's questions.",
         roles=("USER", "ASSISTANT"),
         messages=(),
         offset=0,
