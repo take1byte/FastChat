@@ -241,7 +241,7 @@ def get_conversation_template(model_path: str) -> Conversation:
 
 def get_generate_stream_function(model: torch.nn.Module, model_path: str):
     """Get the generate_stream function for inference."""
-    from fastchat.serve.inference import generate_stream
+    from fastchat.serve.inference import generate_composite_stream
 
     model_type = str(type(model)).lower()
     is_chatglm = "chatglm" in model_type
@@ -255,7 +255,7 @@ def get_generate_stream_function(model: torch.nn.Module, model_path: str):
     elif is_codet5p:
         return generate_stream_codet5p
     else:
-        return generate_stream
+        return generate_composite_stream
 
 
 def add_model_args(parser):

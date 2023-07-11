@@ -4,8 +4,9 @@ import gc
 import math
 import sys
 import time
-from typing import Iterable, Optional, Dict
+from typing import Iterable, Optional, Dict, List
 import warnings
+from datetime import datetime
 
 import psutil
 import torch
@@ -34,7 +35,21 @@ from fastchat.model.model_adapter import (
     get_generate_stream_function,
 )
 from fastchat.modules.gptq import GptqConfig
-from fastchat.utils import is_partial_stop, is_sentence_complete, get_context_length
+from fastchat.utils import (
+    is_partial_stop,
+    is_sentence_complete,
+    get_context_length,
+    build_logger,
+)
+
+
+logger = build_logger(
+    "inference",
+    f"inference_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.log",
+)
+
+max_custom_turns = 0
+response_idx = 0
 
 
 def prepare_logits_processor(
@@ -51,6 +66,146 @@ def prepare_logits_processor(
     if top_k > 0:
         processor_list.append(TopKLogitsWarper(top_k))
     return processor_list
+
+
+def load_custom_responses():
+    import traceback, sys
+    from os.path import expandvars, exists
+    import json
+
+    custom_responses = []
+    convo_file = expandvars("$HOME/workspaces/ethicalai-demo/data/demo_convo.json")
+
+    if not exists(convo_file):
+        return custom_responses
+
+    with open(convo_file, "r") as f:
+        try:
+            msgs_json = json.loads(f.read())
+            try:
+                for pair in msgs_json["messages"]:
+                    if pair[0] == "Assistant":
+                        custom_responses.append(pair[1])
+            except:
+                print(
+                    f"Conversation file {convo_file} is expected to have 'messages': [['User', 'message'], ['Assistant', 'message'], ...]."
+                )
+                traceback.print_exception(*sys.exc_info())
+        except:
+            print(f"Conversation file {convo_file} is expected to be a JSON file.")
+            traceback.print_exception(*sys.exc_info())
+    return custom_responses
+
+
+@torch.inference_mode()
+def generate_custom_stream(
+    model, tokenizer, params: Dict, context_len: int, custom_responses: List[str]
+):
+    """Generates a stream of responses from custom_responses"""
+    global response_idx
+
+    # Read parameters
+    prompt = params["prompt"]
+    max_new_tokens = int(params.get("max_new_tokens", 256))
+    stop_token_ids = params.get("stop_token_ids", None) or []
+    stop_token_ids.append(tokenizer.eos_token_id)
+
+    logger.debug(f"prompt: {prompt}")
+
+    input_ids = tokenizer(prompt).input_ids
+
+    if model.config.is_encoder_decoder:
+        max_src_len = context_len
+    else:  # truncate
+        max_src_len = context_len - max_new_tokens - 8
+
+    input_ids = input_ids[-max_src_len:]
+    input_echo_len = len(input_ids)
+
+    stopped = False
+
+    output = ""
+    for i, token in enumerate(custom_responses[response_idx].split(), start=1):
+        if i == 1:
+            output = token
+        else:
+            output = output + " " + token
+
+        logger.debug(f"yielding 'text': {output}")
+        logger.debug(
+            f"'prompt_tokens': {input_echo_len}; 'completion_tokens': {i}; 'total_tokens': {input_echo_len + i}"
+        )
+
+        yield {
+            "text": output,
+            "usage": {
+                "prompt_tokens": input_echo_len,
+                "completion_tokens": i,
+                "total_tokens": input_echo_len + i,
+            },
+            "finish_reason": None,
+        }
+    stopped = True
+    response_idx += 1
+
+    # Finish stream event, which contains finish reason
+    if i == max_new_tokens - 1:
+        finish_reason = "length"
+    elif stopped:
+        finish_reason = "stop"
+    else:
+        finish_reason = None
+
+    yield {
+        "text": output,
+        "usage": {
+            "prompt_tokens": input_echo_len,
+            "completion_tokens": i,
+            "total_tokens": input_echo_len + i,
+        },
+        "finish_reason": finish_reason,
+    }
+
+
+@torch.inference_mode()
+def generate_composite_stream(
+    model,
+    tokenizer,
+    params: Dict,
+    device: str,
+    context_len: int,
+    stream_interval: int = 2,
+    judge_sent_end: bool = False,
+):
+    """Generates a stream consisting of `generate_custom_stream` followed by `generate_stream`."""
+    global response_idx
+    global max_custom_turns
+    custom_responses = load_custom_responses()
+    max_custom_turns = len(custom_responses)
+
+    if response_idx < max_custom_turns:
+        for element in generate_custom_stream(
+            model,
+            tokenizer,
+            params,
+            context_len,
+            custom_responses,
+        ):
+            yield element
+    else:
+        for element in generate_stream(
+            model,
+            tokenizer,
+            params,
+            device,
+            context_len,
+            stream_interval,
+            judge_sent_end,
+        ):
+            yield element
+    # Clean
+    gc.collect()
+    torch.cuda.empty_cache()
 
 
 @torch.inference_mode()
