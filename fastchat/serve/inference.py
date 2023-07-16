@@ -101,6 +101,8 @@ def load_custom_responses():
 def generate_custom_stream(
     model, tokenizer, params: Dict, context_len: int, custom_responses: List[str]
 ):
+    import time
+
     """Generates a stream of responses from custom_responses"""
     global response_idx
 
@@ -110,7 +112,7 @@ def generate_custom_stream(
     stop_token_ids = params.get("stop_token_ids", None) or []
     stop_token_ids.append(tokenizer.eos_token_id)
 
-    logger.debug(f"prompt: {prompt}")
+    logger.info(f"prompt: {prompt}")
 
     input_ids = tokenizer(prompt).input_ids
 
@@ -131,11 +133,12 @@ def generate_custom_stream(
         else:
             output = output + " " + token
 
-        logger.debug(f"yielding 'text': {output}")
-        logger.debug(
+        logger.info(f"yielding 'text': {output}")
+        logger.info(
             f"'prompt_tokens': {input_echo_len}; 'completion_tokens': {i}; 'total_tokens': {input_echo_len + i}"
         )
 
+        time.sleep(0.1)
         yield {
             "text": output,
             "usage": {
@@ -183,6 +186,21 @@ def generate_composite_stream(
     custom_responses = load_custom_responses()
     max_custom_turns = len(custom_responses)
 
+    if "!!reset" in params["prompt"]:
+        response_idx = 0
+        logger.info(
+            f"Resetting chat! prompt: {params['prompt']}; response_idx: {response_idx}"
+        )
+        for element in generate_composite_stream(
+            model,
+            tokenizer,
+            params,
+            device,
+            context_len,
+            stream_interval,
+            judge_sent_end,
+        ):
+            yield element
     if response_idx < max_custom_turns:
         for element in generate_custom_stream(
             model,
