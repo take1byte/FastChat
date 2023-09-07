@@ -1,4 +1,5 @@
 import os
+import argparse
 import json
 import pandas as pd
 
@@ -13,9 +14,55 @@ def format_questions(input_file: str, date: str) -> None:
             row = json.dumps({"question_id": row_num, "category": "car shopping", "turns": [q], "references": [ref]})
             f.write(row + "\n")
             row_num += 1
-        
-if __name__ == "__main__":
-    dates = ['2023-08-30', '2023-08-31', '2023-09-01', '2023-09-02', '2023-09-03']
+
+def format_question_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023-09-02', '2023-09-03']):
     for date in dates:
         input_file = os.path.expandvars(f"$HOME/data/car_shopping_questions_raw_{date}.csv")
         format_questions(input_file, date)
+
+def append_question_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023-09-02', '2023-09-03']):
+    row_num = 0
+    with open("data/mt_bench/question.jsonl", 'r') as f:
+        row_num = sum(1 for _ in f)
+
+    with open("data/mt_bench/question.jsonl", 'a') as f:
+        for date in dates:
+            question_batch = f"data/mt_bench/car_questions_{date}.jsonl"
+            with open(question_batch, 'r') as qb:
+                for line in qb:
+                    kvs = json.loads(line)
+                    kvs["question_id"] = row_num
+                    f.write(json.dumps(kvs) + '\n')
+                    row_num += 1
+
+def append_answer_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023-09-02', '2023-09-03']):
+    row_num = 0
+    with open("data/mt_bench/model_answer/vicuna-7b-v1.5-car_shopping.jsonl", 'r') as f:
+        row_num = sum(1 for _ in f)
+
+    with open("data/mt_bench/model_answer/vicuna-7b-v1.5-car_shopping.jsonl", 'a') as f:
+        for date in dates:
+            answer_batch = f"data/mt_bench/model_answer/car_shopping/vicuna-7b-v1.5-car_shopping-{date}.jsonl"
+            with open(answer_batch, 'r') as ab:
+                for line in ab:
+                    kvs = json.loads(line)
+                    kvs["question_id"] = row_num
+                    f.write(json.dumps(kvs) + '\n')
+                    row_num += 1
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--format-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--append-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--append-answer-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
+
+    args = parser.parse_args()
+
+    if args.format_question_batches and len(args.format_question_batches) > 0:
+        format_question_batches(dates=args.format_question_batches)
+
+    if args.append_question_batches and len(args.append_question_batches) > 0:
+        append_question_batches(dates=args.append_question_batches)
+
+    if args.append_answer_batches and len(args.append_answer_batches) > 0:
+        append_answer_batches(dates=args.append_answer_batches)
