@@ -29,6 +29,7 @@ def run_eval(
     num_gpus_per_model,
     num_gpus_total,
     max_gpu_memory,
+    load_8bit
 ):
     questions = load_questions(question_file, question_begin, question_end)
     # random shuffle the questions to balance the loading
@@ -58,6 +59,7 @@ def run_eval(
                 num_choices,
                 num_gpus_per_model,
                 max_gpu_memory,
+                load_8bit
             )
         )
 
@@ -75,13 +77,14 @@ def get_model_answers(
     num_choices,
     num_gpus_per_model,
     max_gpu_memory,
+    load_8bit,
 ):
     model, tokenizer = load_model(
         model_path,
         device="cuda",
         num_gpus=num_gpus_per_model,
         max_gpu_memory=max_gpu_memory,
-        load_8bit=False,
+        load_8bit=load_8bit,
         cpu_offloading=False,
         debug=False,
     )
@@ -234,6 +237,11 @@ if __name__ == "__main__":
         type=str,
         help="Maxmum GPU memory used for model weights per GPU.",
     )
+    parser.add_argument(
+        "--load-8bit",
+        action="store_true",
+        help="Load model with 8-bit quantization.",
+    )
     args = parser.parse_args()
 
     if args.num_gpus_total // args.num_gpus_per_model > 1:
@@ -261,6 +269,7 @@ if __name__ == "__main__":
         args.num_gpus_per_model,
         args.num_gpus_total,
         args.max_gpu_memory,
+        args.load_8bit
     )
 
     reorg_answer_file(answer_file)
