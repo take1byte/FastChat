@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+import csv
 import pandas as pd
 
 def format_questions(input_file: str, date: str) -> None:
@@ -25,7 +26,7 @@ def append_question_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '20
     with open("data/mt_bench/question.jsonl", 'r') as f:
         row_num = sum(1 for _ in f)
 
-    with open("data/mt_bench/question.jsonl", 'a') as f:
+    with open("data/mt_bench/question.jsonl", 'a+') as f:
         for date in dates:
             question_batch = f"data/mt_bench/car_questions_{date}.jsonl"
             with open(question_batch, 'r') as qb:
@@ -40,7 +41,7 @@ def append_answer_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023
     with open("data/mt_bench/model_answer/vicuna-7b-v1.5-car_shopping.jsonl", 'r') as f:
         row_num = sum(1 for _ in f)
 
-    with open("data/mt_bench/model_answer/vicuna-7b-v1.5-car_shopping.jsonl", 'a') as f:
+    with open("data/mt_bench/model_answer/vicuna-7b-v1.5-car_shopping.jsonl", 'a+') as f:
         for date in dates:
             answer_batch = f"data/mt_bench/model_answer/car_shopping/vicuna-7b-v1.5-car_shopping-{date}.jsonl"
             with open(answer_batch, 'r') as ab:
@@ -50,11 +51,26 @@ def append_answer_batches(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023
                     f.write(json.dumps(kvs) + '\n')
                     row_num += 1
 
+def generate_batches_for_annotation(dates=['2023-08-30', '2023-08-31', '2023-09-01', '2023-09-02', '2023-09-03']):
+    for date in dates:
+        question_batch = f"data/mt_bench/car_questions_{date}.jsonl"
+        answer_batch = f"data/mt_bench/model_answer/car_shopping/vicuna-7b-v1.5-car_shopping-{date}.jsonl"
+        with open(f"data/annotate_us/car_shopping_dialogs_to_annotate_{date}.csv", 'a+') as f:
+            csv_writer = csv.writer(f, delimiter=',')
+            with open(question_batch, "r") as qb:
+                with open(answer_batch, "r") as ab:
+                    qs, ans = qb.readlines(), ab.readlines()
+                    for (q, a) in zip(qs, ans):
+                        q_fields = json.loads(q)
+                        a_fields = json.loads(a)
+                        csv_writer.writerow([q_fields["question_id"], q_fields["turns"][0], a_fields["choices"][0]["turns"][0]])
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--format-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
-    parser.add_argument("--append-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
-    parser.add_argument("--append-answer-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--format-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd, e.g., 2023-08-30, 2023-08-31, 2023-09-01. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--append-question-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd, e.g., 2023-08-30, 2023-08-31, 2023-09-01. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--append-answer-batches", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd, e.g., 2023-08-30, 2023-08-31, 2023-09-01.. Each date corresponds to a batch of questions collected on that date.")
+    parser.add_argument("--generate-batches-for-annotation", type=lambda s: [date.strip() for date in s.split(",")], help="Comma separated list of dates yyyy-mm-dd, e.g., 2023-08-30, 2023-08-31, 2023-09-01.. Each date corresponds to a batch of questions collected on that date.")
 
     args = parser.parse_args()
 
@@ -66,3 +82,6 @@ if __name__ == "__main__":
 
     if args.append_answer_batches and len(args.append_answer_batches) > 0:
         append_answer_batches(dates=args.append_answer_batches)
+    
+    if args.generate_batches_for_annotation and len(args.generate_batches_for_annotation) > 0:
+        generate_batches_for_annotation(dates=args.generate_batches_for_annotation)
